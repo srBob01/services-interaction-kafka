@@ -1,0 +1,122 @@
+services:
+  # Zookeeper
+  zookeeper:
+    image: bitnami/zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    ports:
+      - "2181:2181"
+
+  # Kafka Broker 1
+  kafka1:
+    image: bitnami/kafka:latest
+    container_name: kafka1
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      # слушаем локально, но "advertise" внутри Docker-сети как kafka1:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092
+
+      # Автосоздание топиков + настройка партиций/репликации
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_NUM_PARTITIONS: "2"
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "2"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: "2"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: "2"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "2"
+    ports:
+      - "9092:9092"
+
+  # Kafka Broker 2
+  kafka2:
+    image: bitnami/kafka:latest
+    container_name: kafka2
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093
+
+      # Автосоздание топиков + настройка партиций/репликации
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_NUM_PARTITIONS: "2"
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "2"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: "2"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: "2"
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "2"
+    ports:
+      - "9093:9093"
+
+  # Postgres для Producer
+  producer-db:
+    image: postgres:15-alpine
+    container_name: producer_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: producer_db
+    ports:
+      - "5432:5432"
+
+  # MailHog
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web-интерфейс
+
+  # Producer
+  producer:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: producer_app
+    depends_on:
+      - producer-db
+      - kafka1
+      - kafka2
+    environment:
+      # Подключение к Postgres
+      DB_HOST: producer-db
+      DB_PORT: 5432
+      DB_NAME: producer_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+
+      # Два брокера Kafka
+      KAFKA_HOST_1: kafka1
+      KAFKA_PORT_1: 9092
+      KAFKA_HOST_2: kafka2
+      KAFKA_PORT_2: 9093
+
+    ports:
+      - "8080:8080"
+
+  # Consumer
+  consumer:
+    build:
+      context: ./consumer
+      dockerfile: Dockerfile
+    container_name: consumer_app
+    depends_on:
+      - kafka1
+      - kafka2
+      - mailhog
+    environment:
+      # Тоже указываем два брокера
+      KAFKA_HOST_1: kafka1
+      KAFKA_PORT_1: 9092
+      KAFKA_HOST_2: kafka2
+      KAFKA_PORT_2: 9093
+
+    ports:
+      - "8081:8081"

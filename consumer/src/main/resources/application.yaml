@@ -1,0 +1,30 @@
+server:
+  port: 8081
+
+spring:
+  kafka:
+    bootstrap-servers: "${KAFKA_HOST_1:localhost}:${KAFKA_PORT_1:9092},${KAFKA_HOST_2:localhost}:${KAFKA_PORT_2:9092}"
+    consumer:
+      group-id: "email-consumer-group"
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.kafka.consumer.value-json-type: ru.arsentiev.consumer.model.Item
+        spring.json.value.default.type: ru.arsentiev.consumer.model.Item
+        spring.json.trusted.packages: "ru.arsentiev.consumer.model, java.util, java.lang"
+      auto-offset-reset: earliest
+
+  mail:
+    host: mailhog
+    port: 1025
+    username: ""
+    password: ""
+    protocol: smtp
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
+
+# ?????, ? ???????? ????? ??????
+producer:
+  kafka:
+    topic: "items-topic"
