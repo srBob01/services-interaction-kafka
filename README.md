@@ -36,18 +36,49 @@
 
 ---
 
-## Структура проекта
+## Миграция базы данных
 
-- **Producer**:
-    - Хранит информацию о товарах и их владельцах в базе данных PostgreSQL.
-    - Периодически выбирает случайный товар и публикует его в Kafka-топик.
+Для управления схемой базы данных и загрузки начальных данных используется **Flyway**.
 
-- **Consumer**:
-    - Читает сообщения из Kafka-топика.
-    - Обрабатывает полученные данные и отправляет уведомления по электронной почте.
+### Начальные данные
 
+При развертывании приложения в базе данных создаются таблицы `items` и `owners`, а также загружаются начальные данные.
+
+Пример SQL-скрипта миграции (`V1__init.sql`):
+
+```sql
+CREATE TABLE owners (
+    email VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE items (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    owner_email VARCHAR(255),
+    FOREIGN KEY (owner_email) REFERENCES owners(email)
+);
+
+INSERT INTO owners (email, name) VALUES
+    ('owner1@example.com', 'Owner 1'),
+    ('owner2@example.com', 'Owner 2');
+
+INSERT INTO items (name, owner_email) VALUES
+    ('ItemA_of_owner1@example.com', 'owner1@example.com'),
+    ('ItemB_of_owner2@example.com', 'owner2@example.com');
+```
+
+### Конфигурация Flyway
+
+Flyway настроен в `application.yaml`:
+
+```yaml
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+```
 ---
-
 ## Docker Compose
 
 ```yaml
